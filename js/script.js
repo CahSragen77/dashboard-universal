@@ -1,82 +1,129 @@
-// Menangkap elemen dari HTML
 const fileInput = document.getElementById('fileSQL');
 const tabelHead = document.getElementById('tabelHead');
 const tabelBody = document.getElementById('tabelBody');
 const selectX = document.getElementById('selectX');
 const selectY = document.getElementById('selectY');
 
-let globalDataArray = []; // Menyimpan data aktif secara global
-let objekGrafik = null;   // Menyimpan status grafik aktif agar tidak bentrok
+let globalDataArray = [];
+let objekGrafik = null;
 
-// Mengawasi ketika ada file yang diunggah
+// Memuat pustaka database SQL.js secara otomatis dari internet saat web dibuka
+let SQL;
+const scriptSQL = document.createElement('script');
+scriptSQL.src = "https://cloudflare.com";
+document.head.appendChild(scriptSQL);
+
+scriptSQL.onload = async () => {
+    // Inisialisasi mesin database mini di browser
+    const config = { locateFile: filename => `https://cloudflare.com{filename}` };
+    SQL = await initSqlJs(config);
+    console.log("Mesin Database Mini Siap Beraksi!");
+};
+
 fileInput.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!SQL) {
+        alert("Mesin database sedang memuat, harap tunggu 3 detik lalu coba unggah kembali.");
+        return;
+    }
+
     const reader = new FileReader();
     reader.onload = function(event) {
-        // MENGEKSTRAKSI DATA SQL NYATA SECARA DINAMIS
-        globalDataArray = JalankanEkstraksiData(event.target.result); 
-        
-        if(globalDataArray.length > 0) {
-            TampilkanKeDashboardUniversal(globalDataArray);
-        } else {
-            alert("File SQL terbaca, namun tidak ditemukan baris data 'INSERT INTO' di dalamnya.");
+        try {
+            // Membuat database bayangan di memori browser dari teks file SQL Anda
+            const db = new SQL.Database();
+            db.run(event.target.result);
+
+            // KUNCI UNIVERSAL: Cari nama tabel pertama yang sukses terbuat dari file SQL Anda
+            const cekTabel = db.exec("SELECT name FROM sqlite_master WHERE type='table';");
+            
+            if (cekTabel.length === 0 || !cekTabel[0].values.length) {
+                // Jika tidak ada tabel nyata dengan isi data, gunakan metode pembacaan baris teks darurat
+                globalDataArray = MetodeDaruratMembacaTeks(event.target.result);
+            } else {
+                const namaTabelUtama = cekTabel[0].values[0][0];
+                // Mengambil seluruh isi data dari tabel tersebut
+                const hasilQuery = db.exec(`SELECT * FROM ${namaTabelUtama} LIMIT 100;`);
+                
+                if (hasilQuery.length > 0) {
+                    globalDataArray = KonversiKeObjekDinamis(hasilQuery[0].columns, hasilQuery[0].values);
+                }
+            }
+
+            if (globalDataArray.length > 0) {
+                TampilkanKeDashboardUniversal(globalDataArray);
+            } else {
+                alert("File berhasil dibaca, namun tidak ditemukan baris data transaksi di dalamnya. Pastikan file SQL Anda berisi data kasir.");
+            }
+        } catch (err) {
+            // Jika struktur file PostgreSQL terlalu kompleks, gunakan mesin penyaring teks darurat kita
+            globalDataArray = MetodeDaruratMembacaTeks(event.target.result);
+            if (globalDataArray.length > 0) {
+                TampilkanKeDashboardUniversal(globalDataArray);
+            } else {
+                alert("Gagal mengekstrak data. Struktur file SQL ini hanya berisi definisi tabel kosong tanpa baris data.");
+            }
         }
     };
     reader.readAsText(file);
 });
 
-// FUNGSI UTAMA UNTUK EKSTRAKSI TEKS FILE SQL MENJADI ARRAY OBJEK (UNIVERSAL)
-function JalankanEkstraksiData(teksMentahSQL) {
+// MESIN DARURAT: Menyaring baris teks jika file SQL tidak bisa dieksekusi langsung oleh database mini
+function MetodeDaruratMembacaTeks(teksSQL) {
     const hasilData = [];
-    // Membagi teks SQL per baris
-    const barisTeks = teksMentahSQL.split('\n');
+    const barisTeks = teksSQL.split('\n');
     
     barisTeks.forEach(baris => {
         const barisBersih = baris.trim();
-        // Mencari baris yang mengandung perintah input data database (INSERT INTO)
-        if (barisBersih.toUpperCase().startsWith("INSERT INTO")) {
+        // Hanya mengambil baris data nyata (INSERT INTO) dan mengabaikan baris rumus/fungsi (CREATE FUNCTION)
+        if (barisBersih.toUpperCase().startsWith("INSERT INTO") && barisBersih.includes("VALUES")) {
             try {
-                // 1. Ambil Nama Kolom secara dinamis dari dalam kurung pertama
                 const bagianKolom = barisBersih.substring(barisBersih.indexOf('(') + 1, barisBersih.indexOf(')'));
                 const namaKolomArray = bagianKolom.split(',').map(k => k.replace(/[`"'\s]/g, ''));
 
-                // 2. Ambil Nilai Data dari bagian VALUES
                 const bagianValues = barisBersih.substring(barisBersih.toUpperCase().indexOf('VALUES') + 6).trim();
                 const isiDataBersih = bagianValues.substring(bagianValues.indexOf('(') + 1, bagianValues.lastIndexOf(')'));
-                
-                // Memisahkan nilai dengan koma, dengan membuang tanda petik pembungkus teks
                 const nilaiDataArray = isiDataBersih.split(',').map(v => v.trim().replace(/^['"]|['"]$/g, ''));
 
-                // 3. Gabungkan Kolom dan Nilai menjadi satu objek Dinamis
                 if (namaKolomArray.length === nilaiDataArray.length) {
                     const objekBaris = {};
                     namaKolomArray.forEach((kolom, indeks) => {
-                        // Jika nilainya angka murni, ubah jadi tipe data angka agar bisa dihitung oleh grafik
-                        objekBaris[kolom] = isNaN(nilaiDataArray[indeks]) ? nilaiDataArray[indeks] : Number(nilaiDataArray[indeks]);
+                        // Saringan ketat: Memastikan nama variabel rumus tidak masuk sebagai nama kolom
+                        if(!kolom.includes('|') && !kolom.includes('#')) {
+                            const nilai = nilaiDataArray[indeks];
+                            objekBaris[kolom] = isNaN(nilai) ? nilai : Number(nilai);
+                        }
                     });
-                    hasilData.push(objekBaris);
+                    if (Object.keys(objekBaris).length > 0) {
+                        hasilData.push(objekBaris);
+                    }
                 }
-            } catch (error) {
-                // Mengabaikan baris yang formatnya tidak sesuai standar ekstrasi
-            }
+            } catch (e) {}
         }
     });
     return hasilData;
 }
 
-// FUNGSI UNTUK MENAMPILKAN DATA KE TABEL HTML
+function KonversiKeObjekDinamis(kolom, nilaiBaris) {
+    return nilaiBaris.map(baris => {
+        const objek = {};
+        kolom.forEach((namaKolom, indeks) => {
+            objek[namaKolom] = isNaN(baris[indeks]) ? baris[indeks] : Number(baris[indeks]);
+        });
+        return objek;
+    });
+}
+
 function TampilkanKeDashboardUniversal(dataArray) {
     tabelHead.innerHTML = "";
     tabelBody.innerHTML = "";
 
-    if (dataArray.length === 0) return;
+    if (!dataArray || dataArray.length === 0) return;
 
-    // Mengambil nama kolom otomatis dari struktur objek pertama
     const semuaKolom = Object.keys(dataArray[0]); 
 
-    // Membuat header tabel otomatis
     let barisHeader = "<tr>";
     semuaKolom.forEach(namaKolom => {
         barisHeader += `<th>${namaKolom}</th>`;
@@ -84,11 +131,10 @@ function TampilkanKeDashboardUniversal(dataArray) {
     barisHeader += "</tr>";
     tabelHead.innerHTML = barisHeader;
 
-    // Memasukkan isi data ke baris tabel otomatis
     dataArray.forEach(barisData => {
         let cetakBaris = "<tr>";
         semuaKolom.forEach(namaKolom => {
-            cetakBaris += `<td>${barisData[namaKolom]}</td>`;
+            cetakBaris += `<td>${barisData[namaKolom] !== undefined ? barisData[namaKolom] : ''}</td>`;
         });
         cetakBaris += "</tr>";
         tabelBody.innerHTML += cetakBaris;
@@ -97,7 +143,6 @@ function TampilkanKeDashboardUniversal(dataArray) {
     PerbaruiDropdownGrafik(semuaKolom);
 }
 
-// FUNGSI UNTUK MEMPERBARUI MENU PILIHAN DROPDOWN GRAFIK
 function PerbaruiDropdownGrafik(semuaKolom) {
     selectX.innerHTML = "";
     selectY.innerHTML = "";
@@ -107,38 +152,30 @@ function PerbaruiDropdownGrafik(semuaKolom) {
         selectY.innerHTML += `<option value="${kolom}">${kolom}</option>`;
     });
 
-    // Pilih opsi default secara otomatis (Kolom 1 untuk Sumbu X, Kolom 2 untuk Sumbu Y)
     if(semuaKolom.length > 1) {
         selectY.selectedIndex = 1;
     }
-
-    // Picu pembuatan grafik pertama kali
     BuatAtauPerbaruiGrafik();
 }
 
-// Mengawasi perubahan jika pengguna memilih kolom grafik yang berbeda
 selectX.addEventListener('change', BuatAtauPerbaruiGrafik);
 selectY.addEventListener('change', BuatAtauPerbaruiGrafik);
 
-// FUNGSI UNTUK MENGGAMBAR GRAFIK SECARA DINAMIS (CHART.JS)
 function BuatAtauPerbaruiGrafik() {
     const kolomX = selectX.value;
     const kolomY = selectY.value;
 
     if (!kolomX || !kolomY || globalDataArray.length === 0) return;
 
-    // Ambil data array berdasarkan kolom yang dipilih pengguna lewat dropdown
     const labelX = globalDataArray.map(data => data[kolomX]);
     const nilaiY = globalDataArray.map(data => data[kolomY]);
 
     const ctx = document.getElementById('grafikUniversal').getContext('2d');
 
-    // Jika grafik lama sudah ada, hapus dulu agar tidak tumpang tindih saat digambar ulang
     if (objekGrafik) {
         objekGrafik.destroy();
     }
 
-    // Menggambar grafik batang (Bar Chart) baru yang dinamis
     objekGrafik = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -153,9 +190,7 @@ function BuatAtauPerbaruiGrafik() {
         },
         options: {
             responsive: true,
-            scales: {
-                y: { beginAtZero: true }
-            }
+            scales: { y: { beginAtZero: true } }
         }
     });
 }
