@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Universal</title>
+    <!-- 1. Menyambungkan ke desain (CSS) -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- 2. Mengambil pustaka grafik gratis dari internet -->
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>Silent Solver AI</h2>
+        <!-- Tombol Unggah File Universal -->
+        <div class="upload-box">
+            <label for="fileSQL">Unggah File SQL/JSON:</label>
+            <input type="file" id="fileSQL" accept=".sql,.json,.txt">
+        </div>
+        
+        <!-- Pilihan grafik dinamis (akan terisi otomatis oleh JS) -->
+        <div class="control-box">
+            <label>Sumbu X (Kategori):</label>
+            <select id="selectX"><option>Pilih File Dulu</option></select>
+            
+            <label>Sumbu Y (Angka/Nilai):</label>
+            <select id="selectY"><option>Pilih File Dulu</option></select>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Area Grafik Dinamis -->
+        <div class="card chart-container">
+            <canvas id="grafikUniversal"></canvas>
+        </div>
+
+        <!-- Area Tabel Dinamis -->
+        <div class="card table-container">
+            <table id="tabelUniversal">
+                <thead id="tabelHead"><!-- Kolom otomatis di sini --></thead>
+                <tbody id="tabelBody"><!-- Baris otomatis di sini --></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 3. Menyambungkan ke logika (JavaScript) di paling bawah -->
+    <script src="js/script.js"></script>
+</body>
+</html>
