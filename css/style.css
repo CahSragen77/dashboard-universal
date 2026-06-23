@@ -1,0 +1,51 @@
+:root {
+    --bg-dark: #0f172a;
+    --card-dark: #1e293b;
+    --text-main: #f8fafc;
+    --accent: #38bdf8;
+}
+
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    display: flex; /* Membagi layar jadi Sidebar dan Konten Utama */
+    height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background-color: var(--card-dark);
+    padding: 20px;
+    border-right: 1px solid #334155;
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto; /* Bisa di-scroll jika datanya ribuan baris */
+}
+
+.card {
+    background-color: var(--card-dark);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid #334155;
+    text-align: left;
+}
+
+th {
+    background-color: #020617;
+    color: var(--accent);
+}
